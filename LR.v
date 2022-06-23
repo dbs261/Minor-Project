@@ -18,227 +18,220 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
+//https://stackoverflow.com/questions/17778418/what-is-and
+//Possible multiple driver issue with B_val
+module LR
+#(
+parameter MAX_DP = 6,MAX_FEATURES = 6, //Fixed
+DPS = 6, DP_BITS = 4, FEATURES = 6, TOTAL_EPOCHS = 15//inputs externally or by python
+)
+(
+input CLK,
+inout signed[(MAX_FEATURES+1)*16-1:0] temp, //temp variable for output data of RAM = dp + y
+output fin_final,
+output reg[DP_BITS-1:0] i//data point number
+//output reg we, en, rst
+// features, dps, total_epochs
+);
+
+integer c;
+parameter s0 = 3'd0, s1 = 3'd1, s2 = 3'd3, s3 = 3'd2, idle = 3'd4, load_wt=3'd5;//Gray code
+// make another state where the weights are updated to ram
+wire fin;
+//if dps > 16, change dp_bits also
+reg[2:0] PS,NS;
+
+reg[5:0] epochs;//max 128 epochs
+//reg rst;
+//reg en,we;
+
+reg signed [15:0] y_cap[MAX_DP-1:0];
+reg signed [15:0] y[MAX_DP-1:0];
+
+reg signed[15:0] wt[MAX_FEATURES:0];// max_features + 1 constant
 
 
-module LR(
-//output[15:0] weights[3:0]
-output clk
-//input clk, input[7:0] A, B,
-//output[7:0] P
-    );
-//wire[15:0] y_out;    
 
-reg signed [15:0] y_cap[3:0];
-reg signed [15:0] y[3:0];
-//reg[15:0] learning_rate;
-reg signed[15:0] wt[3:0];
-//wire signed[15:0] w_t[3:0];
 
-reg signed[15:0] dp[15:0];
-reg CLK,wea;
-wire signed[15:0] P1, P2, P3, P0, P4, P5, P6, P7;
+wire signed[15:0] P[MAX_FEATURES-1:0];// Products of multiplier, num = max_features
 reg signed[15:0] common_p;
-reg[1:0] i;
-reg[1:0] num_features;
-//assign weights[0] = wt[0];
-//assign weights[1] = wt[1];
-//assign weights[2] = wt[2];
-//assign weights[3] = wt[3];
 
-//reg signed[15:0] dina;
-//reg[15:0] addra;
-//wire signed[15:0] douta;
+reg signed[15:0] A_vals[MAX_FEATURES-1:0]; // temp var for feeding to multiplier
+reg signed[15:0] B_vals[MAX_FEATURES-1:0];
 
-assign clk = CLK;
-//assign w_t[0] = wt[0];
-//assign w_t[1] = wt[1];
-//assign w_t[2] = wt[2];
-//assign w_t[3] = wt[3];
 
-//assign clk = y;
 
-//blk_mem_gen_0 bram (
-//  .clka(CLK),    // input wire clka
-//  .wea(wea),      // input wire [0 : 0] wea write enable
-//  .addra(addra),  // input wire [4 : 0] addra
-//  .dina(dina),    // input wire [15 : 0] dina
-//  .douta(douta)  // output wire [15 : 0] douta
-//);
+//RAM2 r(.we(we),.oe(en),.RST(rst),.addr(i),.data(temp));
 
 initial
 begin
-y[0] <= 16'h3c00;//15
-y[1] <= 16'h3c00;//15
-y[2] <= 16'h3c00;//15
-y[3] <= 16'h3c00;//15
-//y[1] <= 16'h4800;//18
-//y[2] <= 16'h3c00;//15
-//y[3] <= 16'h4000;//16
-{y_cap[0],y_cap[1],y_cap[2],y_cap[3]}<=0;
-i<=0;
-num_features<=3;
-//learning_rate<=16'h0010; //0.015625
+//{rst,we}<=0;
+//en<=1;
+NS <= idle;
+epochs<=0;
 
-dp[0]<=16'h0800;//2
-dp[1]<=16'h1000;//4
-dp[2]<=16'h0c00;//3
-dp[3]<=16'h1800;//6
+//$readmemh("E:/Dhanush/Minor_project/Minor_project.srcs/sources_1/new/y_vals.txt",y);
 
-dp[4]<=16'h0800;//2
-dp[5]<=16'h1000;//4
-dp[6]<=16'h0c00;//3
-dp[7]<=16'h1800;//6
 
-dp[8]<=16'h0800;//2
-dp[9]<=16'h1000;//4
-dp[10]<=16'h0c00;//3
-dp[11]<=16'h1800;//6
-
-dp[12]<=16'h0800;//2
-dp[13]<=16'h1000;//4
-dp[14]<=16'h0c00;//3
-dp[15]<=16'h1800;//6
-
-//dp[4]<=16'h0c00;//3
-//dp[5]<=16'h1000;//4
-//dp[6]<=16'h1400;//5
-//dp[7]<=16'h4000;//6
-
-//dp[8]<=16'h2400;//9
-//dp[9]<=16'h0400;//1
-//dp[10]<=16'h0800;//2
-//dp[11]<=16'h0c00;//3
-
-//dp[12]<=16'h1c00;//7
-//dp[13]<=16'h2000;//8
-//dp[14]<=16'h0000;//0
-//dp[15]<=16'h0400;//1
-    
-wt[0]<=16'h0100;//0.25
-wt[1]<=16'h0100;
-wt[2]<=16'h0100;
-wt[3]<=16'h0100;
-
-//wt[0]<=16'h0400;
-//wt[1]<=16'h0400;
-//wt[2]<=16'h0400;
-//wt[3]<=16'h0400;
-end    
-
-initial
+for(c = 0;c<MAX_DP; c = c + 1)
 begin
-CLK = 0;
-    forever
-        #1 CLK = ~CLK;
+    y_cap[c]<=0;
 end
 
-mult_gen_0 m0 (
-  .CLK(CLK),  // input wire CLK
-  .A(dp[(num_features+1)*i]),      // input wire [15 : 0] A
-  .B(wt[0]),      // input wire [15 : 0] B
-  .P(P0)      // output wire [15 : 0] P
-);
+i<=0;//initialize i to the total number of data points
 
-mult_gen_0 m1 (
-  .CLK(CLK),  // input wire CLK
-  .A(dp[(num_features+1)*i+1]),      // input wire [15 : 0] A
-  .B(wt[1]),      // input wire [15 : 0] B
-  .P(P1)      // output wire [15 : 0] P
-);
-
-mult_gen_0 m2 (
-  .CLK(CLK),  // input wire CLK
-  .A(dp[(num_features+1)*i+2]),      // input wire [15 : 0] A
-  .B(wt[2]),      // input wire [15 : 0] B
-  .P(P2)      // output wire [15 : 0] P
-);
-
-mult_gen_0 m3 (
-  .CLK(CLK),  // input wire CLK
-  .A(dp[(num_features+1)*i+3]),      // input wire [15 : 0] A
-  .B(wt[3]),      // input wire [15 : 0] B
-  .P(P3)      // output wire [15 : 0] P
-);
-
-//assign y_out = P0 + P1 + P2 + P3;
-
-always@(P1,P2,P3,P0)
-begin
-    y_cap[i]<=P1+P2+P3+P0;
-    common_p<=(y[i]-P1-P2-P3-P0)>>7;//(y-y^)*learning_rate, 
-end
-
-//mult_gen_0 m4 (
-//  .CLK(~CLK),  // input wire CLK
-//  .A(learning_rate),      // input wire [15 : 0] A
-//  .B(y-y_cap),      // input wire [15 : 0] B
-//  .P(common_p)      // output wire [15 : 0] P
-//);
-
-mult_gen_0 m4 (
-  .CLK(~CLK),  // input wire CLK
-  .A(common_p),      // input wire [15 : 0] A
-  .B(dp[(num_features+1)*i]),      // input wire [15 : 0] B
-  .P(P4)      // output wire [15 : 0] P
-);
-
-mult_gen_0 m5 (
-  .CLK(~CLK),  // input wire CLK
-  .A(common_p),      // input wire [15 : 0] A
-  .B(dp[(num_features+1)*i+1]),      // input wire [15 : 0] B
-  .P(P5)      // output wire [15 : 0] P
-);
-
-mult_gen_0 m6 (
-  .CLK(~CLK),  // input wire CLK
-  .A(common_p),      // input wire [15 : 0] A
-  .B(dp[(num_features+1)*i+2]),      // input wire [15 : 0] B
-  .P(P6)      // output wire [15 : 0] P
-);
-
-mult_gen_0 m7 (
-  .CLK(~CLK),  // input wire CLK
-  .A(common_p),      // input wire [15 : 0] A
-  .B(dp[(num_features+1)*i+3]),      // input wire [15 : 0] B
-  .P(P7)      // output wire [15 : 0] P
-);
-
-always@(negedge clk)
-begin
-    i = i + 1;
-end
-
-//always@(P4,P5,P6,P7)
+//for(c = 0;c<=MAX_FEATURES; c = c + 1)
 //begin
-//wt[0] <=w_t[0] + P4;
-//wt[1] <=w_t[1] + P5;
-//wt[2] <=w_t[2] + P6;
-//wt[3] <=w_t[3] + P7;
+//    wt[c]<=16'h0040;
 //end
 
-//acc a1(P4, wt[0]);
-//acc a2(P5, wt[1]);
-//acc a3(P6, wt[2]);
-//acc a4(P7, wt[3]);
+//$readmemh("E:/Dhanush/Minor_project/Minor_project.srcs/sources_1/new/data_points.txt",ram);
 
-always@(P4)
+//ram[0]<=64'h0600_0300_0400_0200;
+//ram[1]<=64'h0600_0500_0400_0300;
+//ram[2]<=64'h0300_0200_0100_0900;
+//ram[3]<=64'h0100_0000_0800_0700;
+
+end    
+
+
+bw_mul sm0(.a(A_vals[0]),.b(B_vals[0]),.p(P[0]));
+bw_mul sm1(.a(A_vals[1]),.b(B_vals[1]),.p(P[1]));
+bw_mul sm2(.a(A_vals[2]),.b(B_vals[2]),.p(P[2]));
+bw_mul sm3(.a(A_vals[3]),.b(B_vals[3]),.p(P[3]));
+bw_mul sm4(.a(A_vals[4]),.b(B_vals[4]),.p(P[4]));
+bw_mul sm5(.a(A_vals[5]),.b(B_vals[5]),.p(P[5]));
+
+always@(CLK)
 begin
-    wt[0] = wt[0] + P4;
+    PS<=NS;
 end
 
-always@(P5)
+always@(PS)
 begin
-    wt[1] = wt[1] + P5;
+    case(PS)
+        idle:NS<=(fin)?idle:load_wt;
+        load_wt:NS<=s0;
+        s0:NS<=s1;
+        s1:NS<=s2;
+        s2:NS<=s3;
+        s3:NS<=(fin)?idle:s0;
+        default:NS<=idle;
+    endcase
 end
 
-always@(P6)
+
+
+always@(PS)
 begin
-    wt[2] = wt[2] + P6;
+    case(PS)
+        idle:
+        begin
+//            en<=(fin)?0:1;
+//            we<=(fin)?1:0;
+              i<=(fin)?'hz:0;
+        end
+        
+        load_wt:
+        begin
+            for(c = 0;c<=MAX_FEATURES; c = c + 1)
+            begin
+                wt[c]<=temp[16*c+:16];
+            end
+            i<=i+1;
+        end
+        s0:
+        begin
+//            A_vals[0]<=ram[i][15:0];// 0,1,2,3 are the features
+//            A_vals[1]<=ram[i][31:16];
+//            A_vals[2]<=ram[i][47:32];
+//            A_vals[3]<=ram[i][63:48];
+            y[i-1]<=temp[15:0];
+            //Do not change limit
+            for(c = 1; c<=MAX_FEATURES;c=c+1)
+            begin
+                A_vals[c-1]<=temp[16*c+:16];
+            end
+            
+//            B_vals[0]<=wt[0];
+//            B_vals[1]<=wt[1];
+//            B_vals[2]<=wt[2];
+//            B_vals[3]<=wt[3];
+
+            //Do not change limit
+            for(c = 1;c<=MAX_FEATURES; c = c + 1)
+            begin
+                B_vals[c-1]<=wt[c];
+            end
+            
+        end
+        
+        s1:
+        begin
+            y_cap[i-1]=wt[0]+P[1]+P[2]+P[3]+P[0]+P[4]+P[5];
+//            y_cap[i]=P[1]+P[2]+P[3]+P[0];
+//            common_p=(y[i]-y_cap[i])>>>7;//(y-y^)*learning_rate
+            common_p=(y[i-1]-y_cap[i-1])>>>7;//(y-y^)*learning_rate
+
+
+        end
+        
+        s2:
+        begin
+//            B_vals[0]<=common_p;
+//            B_vals[1]<=common_p;
+//            B_vals[2]<=common_p;
+//            B_vals[3]<=common_p;
+
+            //Do not change limit
+            for(c = 0;c<MAX_FEATURES; c = c + 1)
+            begin
+                B_vals[c]<=common_p;
+            end
+
+        end
+        
+        s3:
+        begin
+            if(i==DPS)
+            begin
+                epochs<=epochs+1;
+                i <= 1;
+            end
+            else
+            begin
+                i <= i + 1;
+            end 
+
+        end
+    endcase
 end
 
-always@(P7)
+assign fin = (epochs==TOTAL_EPOCHS)?1:0;
+//assign fin = 0;
+always@(PS)
 begin
-    wt[3] = wt[3] + P7;
+    case(PS)
+        s3:
+        begin
+//            wt[0] <= wt[0] + P[0];
+//            wt[1] <= wt[1] + P[1];
+//            wt[2] <= wt[2] + P[2];
+//            wt[3] <= wt[3] + P[3];
+            wt[0]<=wt[0]+common_p;
+            //Do not change limit
+            for(c=1;c<=MAX_FEATURES;c = c + 1)
+            begin
+                wt[c] <= wt[c] + P[c-1];
+            end
+            
+        end        
+    endcase
 end
-
+assign fin_final = (fin & PS==idle)?1:0;
+assign temp = fin_final?{wt[0],wt[1],wt[2],wt[3],wt[4],wt[5],wt[6]}:'hz;
+//assign temp = (fin & PS==idle)?0:'hz;
+//assign en = (fin & PS==idle)?0:1;
+//assign we = (fin & PS==idle)?1:0;
 endmodule
+// Fix wt[0] change
