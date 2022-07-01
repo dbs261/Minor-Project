@@ -19,17 +19,18 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 //https://stackoverflow.com/questions/17778418/what-is-and
-//Possible multiple driver issue with B_val
+
 module LR
 #(
-parameter MAX_DP = 6,MAX_FEATURES = 6, //Fixed
-DPS = 6, DP_BITS = 4, FEATURES = 6, TOTAL_EPOCHS = 15//inputs externally or by python
+parameter MAX_DP = 6,MAX_FEATURES = 7, //Fixed
+DPS = 6, DP_BITS = 4, NUM_FEATURES = 6, TOTAL_EPOCHS = 15//inputs externally or by python
 )
 (
 input CLK,
 inout signed[(MAX_FEATURES+1)*16-1:0] temp, //temp variable for output data of RAM = dp + y
 output fin_final,
-output reg[DP_BITS-1:0] i//data point number
+output reg[DP_BITS-1:0] i,//data point number
+input enable
 //output reg we, en, rst
 // features, dps, total_epochs
 );
@@ -101,11 +102,25 @@ bw_mul sm2(.a(A_vals[2]),.b(B_vals[2]),.p(P[2]));
 bw_mul sm3(.a(A_vals[3]),.b(B_vals[3]),.p(P[3]));
 bw_mul sm4(.a(A_vals[4]),.b(B_vals[4]),.p(P[4]));
 bw_mul sm5(.a(A_vals[5]),.b(B_vals[5]),.p(P[5]));
+bw_mul sm6(.a(A_vals[6]),.b(B_vals[6]),.p(P[6]));
+//bw_mul sm7(.a(A_vals[7]),.b(B_vals[7]),.p(P[7]));
+//bw_mul sm8(.a(A_vals[8]),.b(B_vals[8]),.p(P[8]));
+//bw_mul sm9(.a(A_vals[9]),.b(B_vals[9]),.p(P[9]));
+//bw_mul sm10(.a(A_vals[10]),.b(B_vals[10]),.p(P[10]));
+//bw_mul sm11(.a(A_vals[11]),.b(B_vals[11]),.p(P[11]));
+//bw_mul sm12(.a(A_vals[12]),.b(B_vals[12]),.p(P[12]));
+//bw_mul sm13(.a(A_vals[13]),.b(B_vals[13]),.p(P[13]));
+//bw_mul sm14(.a(A_vals[14]),.b(B_vals[14]),.p(P[14]));
+//bw_mul sm15(.a(A_vals[15]),.b(B_vals[15]),.p(P[15]));
 
 always@(CLK)
 begin
-    PS<=NS;
+    if(enable==1)
+    begin
+        PS<=NS;
+    end
 end
+//assign temp = 'hz;
 
 always@(PS)
 begin
@@ -129,14 +144,17 @@ begin
         begin
 //            en<=(fin)?0:1;
 //            we<=(fin)?1:0;
-              i<=(fin)?'hz:0;
+//              i<=(fin)?'hz:0;
+              // assign temp to zz here as long as serial in is working.
+              i<=0;
         end
         
         load_wt:
         begin
             for(c = 0;c<=MAX_FEATURES; c = c + 1)
             begin
-                wt[c]<=temp[16*c+:16];
+//                wt[c]<=temp[16*c+:16];
+                wt[c]<=temp[(NUM_FEATURES+1)*16-16*(c+1)+:16];
             end
             i<=i+1;
         end
@@ -146,11 +164,14 @@ begin
 //            A_vals[1]<=ram[i][31:16];
 //            A_vals[2]<=ram[i][47:32];
 //            A_vals[3]<=ram[i][63:48];
-            y[i-1]<=temp[15:0];
+
+//            y[i-1]<=temp[15:0];
+            y[i-1]<=temp[(NUM_FEATURES+1)*16-16+:16];
             //Do not change limit
             for(c = 1; c<=MAX_FEATURES;c=c+1)
             begin
-                A_vals[c-1]<=temp[16*c+:16];
+//                A_vals[c-1]<=temp[16*c+:16];
+                A_vals[c-1]<=temp[(NUM_FEATURES+1)*16-16*(c+1)+:16];
             end
             
 //            B_vals[0]<=wt[0];
@@ -168,7 +189,12 @@ begin
         
         s1:
         begin
-            y_cap[i-1]=wt[0]+P[1]+P[2]+P[3]+P[0]+P[4]+P[5];
+            y_cap[i-1] = wt[0];
+            for(c = 0;c<MAX_DP;c = c + 1)
+            begin
+                y_cap[i-1] = y_cap[i-1] + P[c];
+            end
+//            y_cap[i-1]=wt[0]+P[1]+P[2]+P[3]+P[0]+P[4]+P[5];
 //            y_cap[i]=P[1]+P[2]+P[3]+P[0];
 //            common_p=(y[i]-y_cap[i])>>>7;//(y-y^)*learning_rate
             common_p=(y[i-1]-y_cap[i-1])>>>7;//(y-y^)*learning_rate
@@ -229,7 +255,8 @@ begin
     endcase
 end
 assign fin_final = (fin & PS==idle)?1:0;
-assign temp = fin_final?{wt[0],wt[1],wt[2],wt[3],wt[4],wt[5],wt[6]}:'hz;
+assign temp = fin_final?{wt[0],wt[1],wt[2],wt[3],wt[4],wt[5],wt[6],wt[7]}:'hz;
+
 //assign temp = (fin & PS==idle)?0:'hz;
 //assign en = (fin & PS==idle)?0:1;
 //assign we = (fin & PS==idle)?1:0;

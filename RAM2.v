@@ -23,37 +23,42 @@
 module RAM2#(
 //parameter ADDR_WIDTH = 10, 
 parameter ADDR_WIDTH = 3,//3 
-parameter MAX_FEATURES = 6,//6
-parameter DATA_WIDTH = 16*(MAX_FEATURES+1), //width = num_features + 1 for y values
+parameter MAX_FEATURES = 7,//6
+parameter MAX_DATA_WIDTH = 16*(MAX_FEATURES+1), //width = num_features + 1 for y values
 //parameter DEPTH = 1024,      //Num_data points
-parameter DEPTH = 6//6      //Num_data points
+parameter DEPTH = 7//6      //Num_data points + 1 for weights
 //parameter LEN_BITS = 4     // Num_bits required to get 'LENGTH' features
 )
 (
 input we, oe, RST,
 input [ADDR_WIDTH-1:0] addr,
-inout [DATA_WIDTH-1:0] data
+inout [MAX_DATA_WIDTH-1:0] data
 );
 //512kb
 
  
 
 integer i;
-reg [DATA_WIDTH-1:0] mem[DEPTH:0];//wt+datapoints
-reg [DATA_WIDTH-1:0] buffer;
+reg [MAX_DATA_WIDTH-1:0] mem[DEPTH-1:0];//wt+datapoints
+reg [MAX_DATA_WIDTH-1:0] buffer;
 //4 bits for features, 10 bits for data points
 
 initial
 begin
-    $readmemh("E:/Dhanush/Minor_project/Minor_project.srcs/sources_1/new/data_points.txt",mem);
+//    $readmemh("E:/Dhanush/Minor_project/Minor_project.srcs/sources_1/new/data_points.txt",mem);
+//        for(i=0;i<DEPTH;i=i+1)
+//        begin
+//            mem[i]<=0;
+//        end
 end
 
 //For Writing, enable cs, we, and make sure data is available at data bus on posedge.
-always@(addr or RST)
+always@(RST or data)//
 begin
+$display("%h",we);
     if(RST)
     begin
-        for(i=0;i<DEPTH-1;i=i+1)
+        for(i=0;i<DEPTH;i=i+1)
         begin
             mem[i]<=0;
         end
@@ -61,6 +66,7 @@ begin
     else if(we)
     begin
         mem[addr] <= data;
+        $display("addr:%h, RST:%h, we:%h, data:%h",addr, RST, we, data, $time);
     end
 end
 
